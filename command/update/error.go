@@ -17,10 +17,3 @@ var invalidConfigError = errgo.New("invalid config")
 func IsInvalidConfig(err error) bool {
 	return errgo.Cause(err) == invalidConfigError
 }
-
-var invalidFlagsError = errgo.New("invalid flags")
-
-// IsInvalidFlags asserts invalidFlagsError.
-func IsInvalidFlags(err error) bool {
-	return errgo.Cause(err) == invalidFlagsError
-}

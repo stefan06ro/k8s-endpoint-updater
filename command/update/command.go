@@ -8,9 +8,13 @@ import (
 	microerror "github.com/giantswarm/microkit/error"
 	micrologger "github.com/giantswarm/microkit/logger"
 	"github.com/spf13/cobra"
+
+	"github.com/giantswarm/k8s-endpoint-updater/command/update/flag"
 )
 
-var flags = &Flags{}
+var (
+	f = &flag.Flag{}
+)
 
 // Config represents the configuration used to create a new update command.
 type Config struct {
@@ -49,7 +53,9 @@ func New(config Config) (*Command, error) {
 		Run:   newCommand.Execute,
 	}
 
-	newCommand.cobraCommand.PersistentFlags().StringVar(&flags.Foo, "foo", "", "TODO.")
+	newCommand.cobraCommand.PersistentFlags().StringSliceVar(&f.Pod.Names, "pod.names", nil, "List of pod names used to lookup pod IPs.")
+	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Env.Prefix, "provider.env.prefix", "K8S_ENDPOINT_UPDATER_POD_", "Prefix of environment variables providing pod names.")
+	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Kind, "provider.kind", "env", "Provider used to lookup pod IPs.")
 
 	return newCommand, nil
 }
@@ -70,7 +76,7 @@ func (c *Command) CobraCommand() *cobra.Command {
 func (c *Command) Execute(cmd *cobra.Command, args []string) {
 	c.logger.Log("info", "start updating Kubernetes endpoint")
 
-	err := flags.Validate()
+	err := f.Validate()
 	if err != nil {
 		c.logger.Log("error", fmt.Sprintf("%#v", microerror.MaskAny(err)))
 		os.Exit(1)
