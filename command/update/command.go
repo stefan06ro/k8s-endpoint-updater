@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/giantswarm/k8s-endpoint-updater/command/update/flag"
+	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
+	"github.com/giantswarm/k8s-endpoint-updater/service/provider/env"
 )
 
 var (
@@ -92,6 +94,41 @@ func (c *Command) Execute(cmd *cobra.Command, args []string) {
 }
 
 func (c *Command) execute() error {
+	var err error
+
+	var newProvider provider.Provider
+	{
+		k := f.Provider.Kind
+		switch k {
+		case env.Kind:
+			envConfig := env.DefaultConfig()
+			envConfig.Logger = c.logger
+			envConfig.PodNames = f.Pod.Names
+			envConfig.Prefix = f.Provider.Env.Prefix
+			newProvider, err = env.New(envConfig)
+			if err != nil {
+				return microerror.MaskAny(err)
+			}
+		}
+	}
+
+	var podInfos []provider.PodInfo
+	{
+		podInfos, err = newProvider.Lookup()
+		if err != nil {
+			return microerror.MaskAny(err)
+		}
+	}
+
+	fmt.Printf("%#v\n", podInfos)
+
 	// TODO
+	//{
+	//	err = c.updater.Update(podInfos)
+	//	if err != nil {
+	//		return microerror.MaskAny(err)
+	//	}
+	//}
+
 	return nil
 }

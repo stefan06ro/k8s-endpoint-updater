@@ -1,5 +1,5 @@
 hash: e60421cc9f537837432a8a20e2373b9e82e55f0d1d3c5819c97e32009db4ba3c
-updated: 2017-03-04T00:33:47.832802068+01:00
+updated: 2017-03-06T12:59:45.086849363+01:00
 imports:
 - name: github.com/giantswarm/microkit
   version: cf9f13e8b2a258bb89aa89a2487b22611cc37e62
