@@ -48,7 +48,7 @@ func New(config Config) (*Command, error) {
 		updateConfig.Logger = config.Logger
 		updateCommand, err = update.New(updateConfig)
 		if err != nil {
-			panic(err)
+			return nil, microerror.MaskAny(err)
 		}
 	}
 
