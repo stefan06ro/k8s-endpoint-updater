@@ -11,11 +11,13 @@ import (
 
 	microerror "github.com/giantswarm/microkit/error"
 	micrologger "github.com/giantswarm/microkit/logger"
+	microstorage "github.com/giantswarm/microkit/storage"
 	"github.com/spf13/cobra"
 
 	"github.com/giantswarm/k8s-endpoint-updater/command/update/flag"
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider/env"
+	"github.com/giantswarm/k8s-endpoint-updater/service/provider/etcd"
 	"github.com/giantswarm/k8s-endpoint-updater/service/updater"
 )
 
@@ -61,12 +63,16 @@ func New(config Config) (*Command, error) {
 	}
 
 	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.Address, "service.kubernetes.address", "http://127.0.0.1:6443", "Address used to connect to Kubernetes. When empty in-cluster config is created.")
+	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.Cluster.Namespace, "service.kubernetes.cluster.namespace", "default", "Namespace of the guest cluster which endpoints should be updated.")
 	newCommand.CobraCommand().PersistentFlags().BoolVar(&f.Kubernetes.InCluster, "service.kubernetes.inCluster", false, "Whether to use the in-cluster config to authenticate with Kubernetes.")
 	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.TLS.CaFile, "service.kubernetes.tls.caFile", "", "Certificate authority file path to use to authenticate with Kubernetes.")
 	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.TLS.CrtFile, "service.kubernetes.tls.crtFile", "", "Certificate file path to use to authenticate with Kubernetes.")
 	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.TLS.KeyFile, "service.kubernetes.tls.keyFile", "", "Key file path to use to authenticate with Kubernetes.")
 
 	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Env.Prefix, "provider.env.prefix", "K8S_ENDPOINT_UPDATER_POD_", "Prefix of environment variables providing pod names.")
+	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Etcd.Address, "provider.etcd.address", "", "Address used to connect to etcd.")
+	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Etcd.Kind, "provider.etcd.kind", "etcdv2", "Etcd storage client version to use.")
+	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Etcd.Prefix, "provider.etcd.prefix", "", "Prefix of etcd paths providing pod names.")
 	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Kind, "provider.kind", "env", "Provider used to lookup pod IPs.")
 
 	newCommand.cobraCommand.PersistentFlags().StringSliceVar(&f.Updater.Pod.Names, "updater.pod.names", nil, "List of pod names used to lookup pod IPs.")
@@ -119,6 +125,27 @@ func (c *Command) execute() error {
 			envConfig.PodNames = f.Updater.Pod.Names
 			envConfig.Prefix = f.Provider.Env.Prefix
 			newProvider, err = env.New(envConfig)
+			if err != nil {
+				return microerror.MaskAny(err)
+			}
+		case etcd.Kind:
+			var storageService microstorage.Service
+			{
+				storageConfig := microstorage.DefaultConfig()
+				storageConfig.EtcdAddress = f.Provider.Etcd.Address
+				storageConfig.EtcdPrefix = f.Provider.Etcd.Prefix
+				storageConfig.Kind = f.Provider.Etcd.Kind
+				storageService, err = microstorage.New(storageConfig)
+				if err != nil {
+					return microerror.MaskAny(err)
+				}
+			}
+
+			etcdConfig := etcd.DefaultConfig()
+			etcdConfig.Logger = c.logger
+			etcdConfig.PodNames = f.Updater.Pod.Names
+			etcdConfig.Storage = storageService
+			newProvider, err = etcd.New(etcdConfig)
 			if err != nil {
 				return microerror.MaskAny(err)
 			}
@@ -196,7 +223,7 @@ func (c *Command) execute() error {
 	// Use the updater to actually update the endpoints identified by the provided
 	// flags.
 	{
-		err = newUpdater.Update(podInfos)
+		err = newUpdater.Update(f.Kubernetes.Cluster.Namespace, podInfos)
 		if err != nil {
 			return microerror.MaskAny(err)
 		}
