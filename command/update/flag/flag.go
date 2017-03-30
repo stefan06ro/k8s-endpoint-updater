@@ -22,8 +22,8 @@ func (f *Flag) Validate() error {
 	if f.Provider.Kind == "env" && f.Provider.Env.Prefix == "" {
 		return microerror.MaskAnyf(invalidFlagsError, "env prefix must not be empty")
 	}
-	if f.Provider.Kind != "env" {
-		return microerror.MaskAnyf(invalidFlagsError, "provider kind must be 'env'")
+	if f.Provider.Kind == "" {
+		return microerror.MaskAnyf(invalidFlagsError, "provider kind must not be empty")
 	}
 
 	if len(f.Updater.Pod.Names) == 0 {

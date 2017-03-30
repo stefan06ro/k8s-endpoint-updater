@@ -8,3 +8,5 @@ import:
 - package: github.com/spf13/cobra
 - package: github.com/golang/protobuf
   version: 8ee79997227bf9b34611aee7946ae64735e6fd93
+- package: github.com/cenk/backoff
+  version: ~1.0.0
