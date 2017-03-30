@@ -18,6 +18,9 @@ func (f *Flag) Validate() error {
 	if f.Kubernetes.Cluster.Namespace == "" {
 		return microerror.MaskAnyf(invalidFlagsError, "guest cluster namespace must not be empty")
 	}
+	if f.Kubernetes.Cluster.Service == "" {
+		return microerror.MaskAnyf(invalidFlagsError, "guest cluster service must not be empty")
+	}
 
 	if f.Provider.Kind == "env" && f.Provider.Env.Prefix == "" {
 		return microerror.MaskAnyf(invalidFlagsError, "env prefix must not be empty")
