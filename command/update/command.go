@@ -255,10 +255,21 @@ func (c *Command) execute() error {
 	// Use the updater to actually update the endpoints identified by the provided
 	// flags.
 	{
-		err = newUpdater.Update(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
+		action := func() error {
+			err := newUpdater.Update(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
+			if err != nil {
+				return microerror.MaskAny(err)
+			}
+
+			return nil
+		}
+
+		err := backoff.Retry(action, backoff.NewExponentialBackOff())
 		if err != nil {
 			return microerror.MaskAny(err)
 		}
+
+		c.logger.Log("debug", fmt.Sprintf("updated endpoint for service '%s'", f.Kubernetes.Cluster.Service))
 	}
 
 	return nil
