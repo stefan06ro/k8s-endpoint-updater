@@ -84,8 +84,7 @@ func (p *Provider) Lookup() ([]provider.PodInfo, error) {
 		}
 
 		podInfo := provider.PodInfo{
-			IP:   net.ParseIP(IP),
-			Name: pn,
+			IP: net.ParseIP(IP),
 		}
 
 		podInfos = append(podInfos, podInfo)

@@ -79,10 +79,9 @@ type Provider struct {
 func (p *Provider) Lookup() ([]provider.PodInfo, error) {
 	var podInfos []provider.PodInfo
 
-	for i, ev := range podNamesToEnvVars(p.podNames, p.prefix) {
+	for _, ev := range podNamesToEnvVars(p.podNames, p.prefix) {
 		podInfo := provider.PodInfo{
-			IP:   net.ParseIP(os.Getenv(ev)),
-			Name: p.podNames[i],
+			IP: net.ParseIP(os.Getenv(ev)),
 		}
 
 		podInfos = append(podInfos, podInfo)

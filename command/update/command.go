@@ -3,23 +3,21 @@ package update
 
 import (
 	"fmt"
-	"net/url"
 	"os"
-
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"os/signal"
+	"syscall"
 
 	"github.com/cenk/backoff"
 	microerror "github.com/giantswarm/microkit/error"
 	micrologger "github.com/giantswarm/microkit/logger"
-	microstorage "github.com/giantswarm/microkit/storage"
+	"github.com/giantswarm/micrologger/microloggertest"
+	"github.com/giantswarm/operatorkit/client/k8s"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/giantswarm/k8s-endpoint-updater/command/update/flag"
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider/bridge"
-	"github.com/giantswarm/k8s-endpoint-updater/service/provider/env"
-	"github.com/giantswarm/k8s-endpoint-updater/service/provider/etcd"
 	"github.com/giantswarm/k8s-endpoint-updater/service/updater"
 )
 
@@ -79,8 +77,6 @@ func New(config Config) (*Command, error) {
 	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Etcd.Prefix, "provider.etcd.prefix", "", "Prefix of etcd paths providing pod names.")
 	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Kind, "provider.kind", "env", "Provider used to lookup pod IPs.")
 
-	newCommand.cobraCommand.PersistentFlags().StringSliceVar(&f.Updater.Pod.Names, "updater.pod.names", nil, "List of pod names used to lookup pod IPs.")
-
 	return newCommand, nil
 }
 
@@ -117,120 +113,52 @@ func (c *Command) Execute(cmd *cobra.Command, args []string) {
 func (c *Command) execute() error {
 	var err error
 
-	// At first we have to sort out which provider to use. This is based on the
-	// flags given to the updater.
-	var newProvider provider.Provider
+	var k8sClient kubernetes.Interface
 	{
-		k := f.Provider.Kind
-		switch k {
-		case bridge.Kind:
-			if len(f.Updater.Pod.Names) != 1 {
-				return microerror.MaskAnyf(invalidConfigError, "bridge provider expects 1 pod name")
-			}
-			podName := f.Updater.Pod.Names[0]
+		k8sConfig := k8s.DefaultConfig()
 
-			bridgeConfig := bridge.DefaultConfig()
-			bridgeConfig.BridgeName = f.Provider.Bridge.Name
-			bridgeConfig.Logger = c.logger
-			bridgeConfig.PodName = podName
-			newProvider, err = bridge.New(bridgeConfig)
-			if err != nil {
-				return microerror.MaskAny(err)
-			}
-		case env.Kind:
-			envConfig := env.DefaultConfig()
-			envConfig.Logger = c.logger
-			envConfig.PodNames = f.Updater.Pod.Names
-			envConfig.Prefix = f.Provider.Env.Prefix
-			newProvider, err = env.New(envConfig)
-			if err != nil {
-				return microerror.MaskAny(err)
-			}
-		case etcd.Kind:
-			var storageService microstorage.Service
-			{
-				storageConfig := microstorage.DefaultConfig()
-				storageConfig.EtcdAddress = f.Provider.Etcd.Address
-				storageConfig.EtcdPrefix = f.Provider.Etcd.Prefix
-				storageConfig.Kind = f.Provider.Etcd.Kind
-				storageService, err = microstorage.New(storageConfig)
-				if err != nil {
-					return microerror.MaskAny(err)
-				}
-			}
+		k8sConfig.Address = f.Kubernetes.Address
+		k8sConfig.Logger = microloggertest.New()
+		k8sConfig.InCluster = f.Kubernetes.InCluster
+		k8sConfig.TLS.CAFile = f.Kubernetes.TLS.CaFile
+		k8sConfig.TLS.CrtFile = f.Kubernetes.TLS.CrtFile
+		k8sConfig.TLS.KeyFile = f.Kubernetes.TLS.KeyFile
 
-			etcdConfig := etcd.DefaultConfig()
-			etcdConfig.Logger = c.logger
-			etcdConfig.PodNames = f.Updater.Pod.Names
-			etcdConfig.Storage = storageService
-			newProvider, err = etcd.New(etcdConfig)
-			if err != nil {
-				return microerror.MaskAny(err)
-			}
-		default:
-			return microerror.MaskAnyf(invalidConfigError, "unsupported provider kind '%s'", k)
+		k8sClient, err = k8s.NewClient(k8sConfig)
+		if err != nil {
+			return microerror.MaskAny(err)
 		}
 	}
 
-	// We also need to create the updater which is able to update Kubernetes
-	// endpoints.
+	var newProvider provider.Provider
+	{
+		bridgeConfig := bridge.DefaultConfig()
+
+		bridgeConfig.Logger = c.logger
+
+		bridgeConfig.BridgeName = f.Provider.Bridge.Name
+
+		newProvider, err = bridge.New(bridgeConfig)
+		if err != nil {
+			return microerror.MaskAny(err)
+		}
+	}
+
+	// We need to create the updater which is able to update Kubernetes endpoints.
 	var newUpdater *updater.Updater
 	{
-		var kubernetesClient *kubernetes.Clientset
-		{
-			var restConfig *rest.Config
-
-			if f.Kubernetes.InCluster {
-				c.logger.Log("debug", "creating in-cluster config")
-				restConfig, err = rest.InClusterConfig()
-				if err != nil {
-					return microerror.MaskAny(err)
-				}
-
-				if f.Kubernetes.Address != "" {
-					c.logger.Log("debug", "using explicit api server")
-					restConfig.Host = f.Kubernetes.Address
-				}
-			} else {
-				if f.Kubernetes.Address == "" {
-					return microerror.MaskAnyf(invalidConfigError, "kubernetes address must not be empty")
-				}
-
-				c.logger.Log("debug", "creating out-cluster config")
-
-				// Kubernetes listen URL.
-				u, err := url.Parse(f.Kubernetes.Address)
-				if err != nil {
-					return microerror.MaskAny(err)
-				}
-
-				restConfig = &rest.Config{
-					Host: u.String(),
-					TLSClientConfig: rest.TLSClientConfig{
-						CAFile:   f.Kubernetes.TLS.CaFile,
-						CertFile: f.Kubernetes.TLS.CrtFile,
-						KeyFile:  f.Kubernetes.TLS.KeyFile,
-					},
-				}
-			}
-
-			kubernetesClient, err = kubernetes.NewForConfig(restConfig)
-			if err != nil {
-				return microerror.MaskAny(err)
-			}
-		}
-
 		updaterConfig := updater.DefaultConfig()
-		updaterConfig.KubernetesClient = kubernetesClient
+
+		updaterConfig.K8sClient = k8sClient
 		updaterConfig.Logger = c.logger
+
 		newUpdater, err = updater.New(updaterConfig)
 		if err != nil {
 			return microerror.MaskAny(err)
 		}
 	}
 
-	// Once we know which provider to use we execute it to lookup the pod
-	// information we are interested in.
+	// Here we lookup the VM IP we are interested in.
 	var podInfos []provider.PodInfo
 	{
 		action := func() error {
@@ -248,15 +176,15 @@ func (c *Command) execute() error {
 		}
 
 		for _, pi := range podInfos {
-			c.logger.Log("debug", "found pod info", "IP", pi.IP.String(), "pod", pi.Name)
+			c.logger.Log("debug", fmt.Sprintf("found pod info of service '%s'", f.Kubernetes.Cluster.Service), "ip", pi.IP.String())
 		}
 	}
 
-	// Use the updater to actually update the endpoints identified by the provided
+	// Use the updater to actually add the endpoints identified by the provided
 	// flags.
 	{
 		action := func() error {
-			err := newUpdater.Update(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
+			err := newUpdater.Create(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
 			if err != nil {
 				return microerror.MaskAny(err)
 			}
@@ -269,8 +197,48 @@ func (c *Command) execute() error {
 			return microerror.MaskAny(err)
 		}
 
-		c.logger.Log("debug", fmt.Sprintf("updated endpoint for service '%s'", f.Kubernetes.Cluster.Service))
+		c.logger.Log("debug", fmt.Sprintf("added IP to endpoint of service '%s'", f.Kubernetes.Cluster.Service))
 	}
+
+	// Listen to OS signals issued by the Kubernetes scheduler.
+	listener := make(chan os.Signal, 2)
+	signal.Notify(listener, syscall.SIGTERM, syscall.SIGKILL)
+
+	c.logger.Log("debug", "waiting for termination signal")
+
+	s := <-listener
+
+	c.logger.Log("debug", fmt.Sprintf("received termination signal: %#v (%s)\n", s, s))
+
+	// Use the updater to actually delete the endpoints identified by the provided
+	// flags.
+	go func() {
+		action := func() error {
+			err := newUpdater.Delete(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
+			if err != nil {
+				return microerror.MaskAny(err)
+			}
+
+			return nil
+		}
+
+		err := backoff.Retry(action, backoff.NewExponentialBackOff())
+		if err != nil {
+			c.logger.Log("error", fmt.Sprintf("%#v", microerror.MaskAny(err)))
+			os.Exit(1)
+		}
+
+		c.logger.Log("debug", fmt.Sprintf("removed IP from endpoint of service '%s'", f.Kubernetes.Cluster.Service))
+		c.logger.Log("debug", "shutting down with exit code 0")
+
+		os.Exit(0)
+	}()
+
+	<-listener
+
+	c.logger.Log("debug", "shutting down with exit code 0")
+
+	os.Exit(0)
 
 	return nil
 }

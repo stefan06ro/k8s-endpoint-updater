@@ -16,8 +16,8 @@ import (
 // Config represents the configuration used to create a new updater.
 type Config struct {
 	// Dependencies.
-	KubernetesClient *kubernetes.Clientset
-	Logger           micrologger.Logger
+	K8sClient kubernetes.Interface
+	Logger    micrologger.Logger
 }
 
 // DefaultConfig provides a default configuration to create a new updater
@@ -25,25 +25,25 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		// Dependencies.
-		KubernetesClient: nil,
-		Logger:           nil,
+		K8sClient: nil,
+		Logger:    nil,
 	}
 }
 
 // New creates a new updater.
 func New(config Config) (*Updater, error) {
 	// Dependencies.
-	if config.KubernetesClient == nil {
-		return nil, microerror.MaskAnyf(invalidConfigError, "kubernetes client must not be empty")
+	if config.K8sClient == nil {
+		return nil, microerror.MaskAnyf(invalidConfigError, "config.K8sClient must not be empty")
 	}
 	if config.Logger == nil {
-		return nil, microerror.MaskAnyf(invalidConfigError, "logger must not be empty")
+		return nil, microerror.MaskAnyf(invalidConfigError, "config.Logger must not be empty")
 	}
 
 	newUpdater := &Updater{
 		// Dependencies.
-		kubernetesClient: config.KubernetesClient,
-		logger:           config.Logger,
+		k8sClient: config.K8sClient,
+		logger:    config.Logger,
 	}
 
 	return newUpdater, nil
@@ -51,13 +51,13 @@ func New(config Config) (*Updater, error) {
 
 type Updater struct {
 	// Dependencies.
-	kubernetesClient *kubernetes.Clientset
-	logger           micrologger.Logger
+	k8sClient kubernetes.Interface
+	logger    micrologger.Logger
 }
 
-func (p *Updater) Update(namespace, service string, podInfos []provider.PodInfo) error {
+func (p *Updater) Create(namespace, service string, podInfos []provider.PodInfo) error {
 	for _, pi := range podInfos {
-		s, err := p.kubernetesClient.Services(namespace).Get(service, metav1.GetOptions{})
+		s, err := p.k8sClient.Core().Services(namespace).Get(service, metav1.GetOptions{})
 		if err != nil {
 			return microerror.MaskAny(err)
 		}
@@ -81,7 +81,7 @@ func (p *Updater) Update(namespace, service string, podInfos []provider.PodInfo)
 			},
 		}
 
-		_, err = p.kubernetesClient.Endpoints(namespace).Create(endpoint)
+		_, err = p.k8sClient.Core().Endpoints(namespace).Create(endpoint)
 		if errors.IsAlreadyExists(err) {
 			// In case the endpoint we tried to create does already exist, we only
 			// need to append the IPs we got in podInfos.
@@ -97,8 +97,38 @@ func (p *Updater) Update(namespace, service string, podInfos []provider.PodInfo)
 	return nil
 }
 
+func (p *Updater) Delete(namespace, service string, podInfos []provider.PodInfo) error {
+	endpoints, err := p.k8sClient.Core().Endpoints(namespace).List(metav1.ListOptions{})
+	if err != nil {
+		return microerror.MaskAny(err)
+	}
+
+	for i, e := range endpoints.Items {
+		if e.Name != service {
+			// In case the service is set to "worker" and the endpoint name is
+			// "master" we skip until we find the right endpoint.
+			continue
+		}
+
+		for j, _ := range e.Subsets {
+			for _, pi := range podInfos {
+				currentAddresses := endpoints.Items[i].Subsets[j].Addresses
+				desiredAddresses := removeIPFromAddresses(currentAddresses, pi.IP)
+				endpoints.Items[i].Subsets[j].Addresses = desiredAddresses
+			}
+		}
+
+		_, err = p.k8sClient.Core().Endpoints(namespace).Update(&endpoints.Items[i])
+		if err != nil {
+			return microerror.MaskAny(err)
+		}
+	}
+
+	return nil
+}
+
 func (p *Updater) appendIPs(namespace, service string, podInfos []provider.PodInfo) error {
-	endpoints, err := p.kubernetesClient.Endpoints(namespace).List(metav1.ListOptions{})
+	endpoints, err := p.k8sClient.Core().Endpoints(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return microerror.MaskAny(err)
 	}
@@ -126,7 +156,7 @@ func (p *Updater) appendIPs(namespace, service string, podInfos []provider.PodIn
 			}
 		}
 
-		_, err = p.kubernetesClient.Endpoints(namespace).Update(&endpoints.Items[i])
+		_, err = p.k8sClient.Core().Endpoints(namespace).Update(&endpoints.Items[i])
 		if err != nil {
 			return microerror.MaskAny(err)
 		}
@@ -145,14 +175,18 @@ func ipInAddresses(addresses []apiv1.EndpointAddress, IP net.IP) bool {
 	return false
 }
 
-func podInfoByName(podInfos []provider.PodInfo, name string) (provider.PodInfo, error) {
-	for _, pi := range podInfos {
-		if pi.Name == name {
-			return pi, nil
+func removeIPFromAddresses(addresses []apiv1.EndpointAddress, IP net.IP) []apiv1.EndpointAddress {
+	var newAddresses []apiv1.EndpointAddress
+
+	for _, a := range addresses {
+		if a.IP == IP.String() {
+			continue
 		}
+
+		newAddresses = append(newAddresses, a)
 	}
 
-	return provider.PodInfo{}, microerror.MaskAnyf(executionFailedError, "pod info for name '%s' not found", name)
+	return newAddresses
 }
 
 func serviceToPorts(s *apiv1.Service) []apiv1.EndpointPort {

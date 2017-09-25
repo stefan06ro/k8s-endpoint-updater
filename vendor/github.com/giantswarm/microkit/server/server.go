@@ -3,11 +3,9 @@
 package server
 
 import (
-	"crypto/tls"
-	"crypto/x509"
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -21,11 +19,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
 	"github.com/tylerb/graceful"
-	"golang.org/x/net/context"
 
 	microerror "github.com/giantswarm/microkit/error"
 	"github.com/giantswarm/microkit/logger"
 	micrologger "github.com/giantswarm/microkit/logger"
+	"github.com/giantswarm/microkit/tls"
 	"github.com/giantswarm/microkit/transaction"
 	microtransaction "github.com/giantswarm/microkit/transaction"
 	transactionid "github.com/giantswarm/microkit/transaction/context/id"
@@ -184,9 +182,11 @@ func New(config Config) (Server, error) {
 		handlerWrapper: config.HandlerWrapper,
 		requestFuncs:   config.RequestFuncs,
 		serviceName:    config.ServiceName,
-		tlsCAFile:      config.TLSCAFile,
-		tlsCrtFile:     config.TLSCrtFile,
-		tlsKeyFile:     config.TLSKeyFile,
+		tlsCertFiles: tls.CertFiles{
+			RootCAs: []string{config.TLSCAFile},
+			Cert:    config.TLSCrtFile,
+			Key:     config.TLSKeyFile,
+		},
 	}
 
 	return newServer, nil
@@ -212,20 +212,12 @@ type server struct {
 	handlerWrapper func(h http.Handler) http.Handler
 	requestFuncs   []kithttp.RequestFunc
 	serviceName    string
-	tlsCAFile      string
-	tlsCrtFile     string
-	tlsKeyFile     string
+	tlsCertFiles   tls.CertFiles
 }
 
 func (s *server) Boot() {
 	s.bootOnce.Do(func() {
 		s.router.NotFoundHandler = s.newNotFoundHandler()
-
-		// Combine all options this server defines.
-		options := []kithttp.ServerOption{
-			kithttp.ServerBefore(s.requestFuncs...),
-			kithttp.ServerErrorEncoder(s.newErrorEncoderWrapper()),
-		}
 
 		// We go through all endpoints this server defines and register them to the
 		// router.
@@ -242,7 +234,7 @@ func (s *server) Boot() {
 						return
 					}
 
-					responseWriter, err := s.newResponseWriter(w, r)
+					responseWriter, err := s.newResponseWriter(w)
 					if err != nil {
 						s.newErrorEncoderWrapper()(ctx, err, w)
 						return
@@ -271,9 +263,27 @@ func (s *server) Boot() {
 					wrappedEndpoint := s.newEndpointWrapper(e)
 					wrappedEncoder := s.newEncoderWrapper(e, responseWriter)
 
+					// Combine all options this server defines. Since the interface of the
+					// go-kit server changed to not accept a context anymore we have to
+					// work around the context injection by injecting our context via the
+					// very first request function.
+					//
+					// NOTE this is rather an ugly hack and should be revisited. It would
+					// probably make sense to start decoupling from the go-kit code since
+					// there haven't been any benefits from its implementation, but only
+					// from its design ideas. Also note that some of the design ideas
+					// dictated by go-kit do not align with our own ideas and often stood
+					// in our way of making things work how they should be.
+					options := []kithttp.ServerOption{
+						kithttp.ServerBefore(func(context.Context, *http.Request) context.Context {
+							return ctx
+						}),
+						kithttp.ServerBefore(s.requestFuncs...),
+						kithttp.ServerErrorEncoder(s.newErrorEncoderWrapper()),
+					}
+
 					// Now we execute the actual go-kit endpoint handler.
 					kithttp.NewServer(
-						ctx,
 						wrappedEndpoint,
 						wrappedDecoder,
 						wrappedEncoder,
@@ -299,7 +309,7 @@ func (s *server) Boot() {
 
 		go func() {
 			if s.listenURL.Scheme == "https" {
-				tlsConfig, err := s.newTLSConfig()
+				tlsConfig, err := tls.LoadTLSConfig(s.tlsCertFiles)
 				if err != nil {
 					panic(err)
 				}
@@ -365,29 +375,34 @@ func (s *server) newErrorEncoderWrapper() kithttp.ErrorEncoder {
 			}
 		}
 
+		rw, err := s.newResponseWriter(w)
+		if err != nil {
+			panic(err)
+		}
+
 		// Run the custom error encoder. This is used to let the implementing
 		// microservice do something with errors occured during runtime. Things like
-		// writing specific HTTP status codes to the given response writer can be
-		// done.
-		s.errorEncoder(ctx, responseError, w)
+		// writing specific HTTP status codes to the given response writer or
+		// writing data to the response body can be done.
+		s.errorEncoder(ctx, responseError, rw)
 
 		// Log the error and its errgo trace. This is really useful for debugging.
-		errDomain := errorDomain(serverError)
-		errMessage := errorMessage(serverError)
-		errTrace := errorTrace(serverError)
-		s.logger.Log("error", map[string]string{"domain": errDomain, "message": errMessage, "trace": errTrace})
+		s.logger.Log("error", serverError.Error(), "trace", errorTrace(serverError))
 
 		// Emit metrics about the occured errors. That way we can feed our
 		// instrumentation stack to have nice dashboards to get a picture about the
 		// general system health.
-		errorTotal.WithLabelValues(errDomain).Inc()
+		errorTotal.WithLabelValues().Inc()
 
-		// Write the actual response body.
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"code":  responseError.Code(),
-			"error": responseError.Message(),
-			"from":  s.serviceName,
-		})
+		// Write the actual response body in case no response was already written
+		// inside the error encoder.
+		if !rw.HasWritten() {
+			json.NewEncoder(rw).Encode(map[string]interface{}{
+				"code":  responseError.Code(),
+				"error": responseError.Message(),
+				"from":  s.serviceName,
+			})
+		}
 	}
 }
 
@@ -509,10 +524,8 @@ func (s *server) newEndpointWrapper(e Endpoint) kitendpoint.Endpoint {
 func (s *server) newNotFoundHandler() http.Handler {
 	return http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Log the error and its message. This is really useful for debugging.
-		errDomain := errorDomain(nil)
 		errMessage := fmt.Sprintf("not found: %s %s", r.Method, r.URL.Path)
-		errTrace := ""
-		s.logger.Log("error", map[string]string{"domain": errDomain, "message": errMessage, "trace": errTrace})
+		s.logger.Log("error", errMessage, "trace", "")
 
 		// This defered callback will be executed at the very end of the request.
 		defer func(t time.Time) {
@@ -523,7 +536,7 @@ func (s *server) newNotFoundHandler() http.Handler {
 			endpointTotal.WithLabelValues(endpointCode, endpointMethod, endpointName).Inc()
 			endpointTime.WithLabelValues(endpointCode, endpointMethod, endpointName).Set(float64(time.Since(t) / time.Millisecond))
 
-			errorTotal.WithLabelValues(errDomain).Inc()
+			errorTotal.WithLabelValues().Inc()
 		}(time.Now())
 
 		// Write the actual response body.
@@ -538,7 +551,7 @@ func (s *server) newNotFoundHandler() http.Handler {
 }
 
 // newRequestContext creates a new request context and enriches it with request
-// relevant information. E.g. here we put the HTTP X-Transaction-ID header into
+// relevant information. E.g. here we put the HTTP X-Idempotency-Key header into
 // the request context, if any. We also check if there is a transaction response
 // already tracked for the given transaction ID. This information is then stored
 // within the given request context as well. Note that we initialize the
@@ -573,7 +586,7 @@ func (s *server) newRequestContext(w http.ResponseWriter, r *http.Request) (cont
 // inject it into the called http.Handler so it can track the status code we are
 // interested in. It will help us gathering the response status code after it
 // was written by the underlying http.ResponseWriter.
-func (s *server) newResponseWriter(w http.ResponseWriter, r *http.Request) (ResponseWriter, error) {
+func (s *server) newResponseWriter(w http.ResponseWriter) (ResponseWriter, error) {
 	responseConfig := DefaultResponseWriterConfig()
 	responseConfig.ResponseWriter = w
 	responseWriter, err := NewResponseWriter(responseConfig)
@@ -582,42 +595,4 @@ func (s *server) newResponseWriter(w http.ResponseWriter, r *http.Request) (Resp
 	}
 
 	return responseWriter, nil
-}
-
-func (s *server) newTLSConfig() (*tls.Config, error) {
-	var err error
-
-	var roots *x509.CertPool
-	if s.tlsCAFile != "" {
-		roots, err = x509.SystemCertPool()
-		if err != nil {
-			return nil, microerror.MaskAny(err)
-		}
-		b, err := ioutil.ReadFile(s.tlsCAFile)
-		if err != nil {
-			return nil, microerror.MaskAny(err)
-		}
-		ok := roots.AppendCertsFromPEM(b)
-		if !ok {
-			return nil, microerror.MaskAny(fmt.Errorf("could not load root CA: '%s'", s.tlsCAFile))
-		}
-		s.logger.Log("debug", fmt.Sprintf("found TLS root CA file '%s'", s.tlsCAFile))
-	}
-
-	var certs []tls.Certificate
-	if s.tlsCrtFile != "" && s.tlsKeyFile != "" {
-		c, err := tls.LoadX509KeyPair(s.tlsCrtFile, s.tlsKeyFile)
-		if err != nil {
-			return nil, microerror.MaskAny(err)
-		}
-		s.logger.Log("debug", fmt.Sprintf("found TLS public key file '%s' and private key file '%s'", s.tlsCrtFile, s.tlsKeyFile))
-		certs = append(certs, c)
-	}
-
-	tlsConfig := &tls.Config{
-		Certificates: certs,
-		RootCAs:      roots,
-	}
-
-	return tlsConfig, nil
 }
