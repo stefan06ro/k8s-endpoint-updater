@@ -228,7 +228,6 @@ func (c *Command) execute() error {
 		err := backoff.Retry(action, backoff.NewExponentialBackOff())
 		if err != nil {
 			errCh <- microerror.Mask(err)
-			c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
 			return
 		}
 
