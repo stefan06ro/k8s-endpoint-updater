@@ -4,8 +4,8 @@ package command
 import (
 	"github.com/spf13/cobra"
 
-	microerror "github.com/giantswarm/microkit/error"
-	micrologger "github.com/giantswarm/microkit/logger"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 
 	"github.com/giantswarm/k8s-endpoint-updater/command/update"
 	"github.com/giantswarm/k8s-endpoint-updater/command/version"
@@ -48,7 +48,7 @@ func New(config Config) (*Command, error) {
 		updateConfig.Logger = config.Logger
 		updateCommand, err = update.New(updateConfig)
 		if err != nil {
-			return nil, microerror.MaskAny(err)
+			return nil, microerror.Mask(err)
 		}
 	}
 
@@ -63,7 +63,7 @@ func New(config Config) (*Command, error) {
 
 		versionCommand, err = version.New(versionConfig)
 		if err != nil {
-			return nil, microerror.MaskAny(err)
+			return nil, microerror.Mask(err)
 		}
 	}
 

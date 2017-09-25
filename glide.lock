@@ -1,25 +1,8 @@
-hash: efce1c2e5796bccea74b3be4a8efec4b38515218fbd21b1d0e1261ec22f676dd
-updated: 2017-09-24T22:14:55.910473494+02:00
+hash: 7be73b7997f2c1af391676e9a6e170610f098d1a230d62073e6a4756ed193519
+updated: 2017-09-25T12:32:46.373885424+02:00
 imports:
 - name: github.com/cenk/backoff
-  version: 32cd0c5b3aef12c76ed64aaf678f6c79736be7dc
-- name: github.com/coreos/etcd
-  version: 61fc123e7a8b14a0a258aa3f5c4159861b1ec2e7
-  subpackages:
-  - auth/authpb
-  - client
-  - clientv3
-  - etcdserver/api/v3rpc/rpctypes
-  - etcdserver/etcdserverpb
-  - mvcc/mvccpb
-  - pkg/pathutil
-  - pkg/srv
-  - pkg/types
-  - version
-- name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
-  subpackages:
-  - semver
+  version: 61ba96c4d1002f22e06acb8e34a7650611125a63
 - name: github.com/davecgh/go-spew
   version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
@@ -39,15 +22,7 @@ imports:
 - name: github.com/giantswarm/microerror
   version: 5ade94eb4ee35ef72eb9382228470caeddb29989
 - name: github.com/giantswarm/microkit
-  version: b6bf741b5c34be4fff51d944f973318d8b078284
-  subpackages:
-  - error
-  - logger
-  - storage
-  - storage/etcd
-  - storage/etcdv2
-  - storage/memory
-  - tls
+  version: 4871f763488a16c5b7ea3c411bbd82cd5139e29a
 - name: github.com/giantswarm/micrologger
   version: 8a69b2ab80ba2d0bd40d609206518fefacfc8fdf
   subpackages:
@@ -59,9 +34,7 @@ imports:
 - name: github.com/go-kit/kit
   version: a9ca6725cbbea455e61c6bc8a1ed28e81eb3493b
   subpackages:
-  - endpoint
   - log
-  - transport/http
 - name: github.com/go-logfmt/logfmt
   version: 390ab7935ee28ec6b286364bba9b4dd6410cb3d5
 - name: github.com/go-openapi/jsonpointer
@@ -73,7 +46,7 @@ imports:
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/go-stack/stack
-  version: 54be5f394ed2c3e19dac9134a40a95ba5a017f7b
+  version: 100eb0c0a9c5b306ca2fb4f165df21d80ada4b82
 - name: github.com/gogo/protobuf
   version: e18d7aa8f8c624c915db340349aad4c49b10d173
   subpackages:
@@ -81,10 +54,6 @@ imports:
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
-- name: github.com/golang/protobuf
-  version: 8ee79997227bf9b34611aee7946ae64735e6fd93
-  subpackages:
-  - proto
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
 - name: github.com/inconshreveable/mousetrap
@@ -117,18 +86,14 @@ imports:
   version: e90d6d0afc4c315a0d87a568ae68577cc15149a0
   subpackages:
   - context
-  - context/ctxhttp
   - http2
   - http2/hpack
   - idna
-  - internal/timeseries
   - lex/httplex
-  - trace
 - name: golang.org/x/text
-  version: 4ee4af566555f5fbe026368b75596286a312663a
+  version: 2910a502d2bf9e43193af9d68ca516529614eed3
   subpackages:
   - cases
-  - internal
   - internal/tag
   - language
   - runes
@@ -138,20 +103,6 @@ imports:
   - unicode/bidi
   - unicode/norm
   - width
-- name: google.golang.org/grpc
-  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
-  subpackages:
-  - codes
-  - credentials
-  - grpclog
-  - internal
-  - keepalive
-  - metadata
-  - naming
-  - peer
-  - stats
-  - tap
-  - transport
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/yaml.v2

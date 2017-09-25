@@ -7,8 +7,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	microerror "github.com/giantswarm/microkit/error"
-	micrologger "github.com/giantswarm/microkit/logger"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
 )
@@ -44,15 +44,15 @@ func DefaultConfig() Config {
 func New(config Config) (*Provider, error) {
 	// Dependencies.
 	if config.Logger == nil {
-		return nil, microerror.MaskAnyf(invalidConfigError, "logger must not be empty")
+		return nil, microerror.Maskf(invalidConfigError, "logger must not be empty")
 	}
 
 	// Settings.
 	if len(config.PodNames) == 0 {
-		return nil, microerror.MaskAnyf(invalidConfigError, "pod names must not be empty")
+		return nil, microerror.Maskf(invalidConfigError, "pod names must not be empty")
 	}
 	if config.Prefix == "" {
-		return nil, microerror.MaskAnyf(invalidConfigError, "prefix must not be empty")
+		return nil, microerror.Maskf(invalidConfigError, "prefix must not be empty")
 	}
 
 	newProvider := &Provider{

@@ -1,12 +1,10 @@
 package flag
 
-import (
-	"github.com/juju/errgo"
-)
+import "github.com/giantswarm/microerror"
 
-var invalidFlagsError = errgo.New("invalid flags")
+var invalidFlagsError = microerror.New("invalid flags")
 
 // IsInvalidFlags asserts invalidFlagsError.
 func IsInvalidFlags(err error) bool {
-	return errgo.Cause(err) == invalidFlagsError
+	return microerror.Cause(err) == invalidFlagsError
 }

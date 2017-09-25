@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	micrologger "github.com/giantswarm/microkit/logger"
+	"github.com/giantswarm/micrologger"
 
 	"github.com/giantswarm/k8s-endpoint-updater/command"
 )

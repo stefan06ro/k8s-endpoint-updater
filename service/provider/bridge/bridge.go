@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net"
 
-	microerror "github.com/giantswarm/microkit/error"
-	micrologger "github.com/giantswarm/microkit/logger"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
 )
@@ -42,12 +42,12 @@ func DefaultConfig() Config {
 func New(config Config) (*Provider, error) {
 	// Dependencies.
 	if config.Logger == nil {
-		return nil, microerror.MaskAnyf(invalidConfigError, "config.Logger must not be empty")
+		return nil, microerror.Maskf(invalidConfigError, "config.Logger must not be empty")
 	}
 
 	// Settings.
 	if config.BridgeName == "" {
-		return nil, microerror.MaskAnyf(invalidConfigError, "config.BridgeName must not be empty")
+		return nil, microerror.Maskf(invalidConfigError, "config.BridgeName must not be empty")
 	}
 
 	newProvider := &Provider{
@@ -74,14 +74,14 @@ func (p *Provider) Lookup() ([]provider.PodInfo, error) {
 	// with it.
 	netInterface, err := net.InterfaceByName(p.bridgeName)
 	if err != nil {
-		return nil, microerror.MaskAny(err)
+		return nil, microerror.Mask(err)
 	}
 
 	// The interface addresses have to be parsed to find the actual IPV4 we are
 	// interested in.
 	ip, err := ipv4FromInterface(netInterface)
 	if err != nil {
-		return nil, microerror.MaskAny(err)
+		return nil, microerror.Mask(err)
 	}
 
 	// The bridge provider lookup assumes some aspects of our setup. The following
@@ -122,7 +122,7 @@ func incrIPV4(ip net.IP) net.IP {
 func ipv4FromInterface(netInterface *net.Interface) (net.IP, error) {
 	addrs, err := netInterface.Addrs()
 	if err != nil {
-		return nil, microerror.MaskAny(err)
+		return nil, microerror.Mask(err)
 	}
 	for _, addr := range addrs {
 		var ip net.IP

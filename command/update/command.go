@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/cenk/backoff"
-	microerror "github.com/giantswarm/microkit/error"
-	micrologger "github.com/giantswarm/microkit/logger"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 	"github.com/giantswarm/micrologger/microloggertest"
 	"github.com/giantswarm/operatorkit/client/k8s"
 	"github.com/spf13/cobra"
@@ -44,7 +44,7 @@ func DefaultConfig() Config {
 func New(config Config) (*Command, error) {
 	// Dependencies.
 	if config.Logger == nil {
-		return nil, microerror.MaskAnyf(invalidConfigError, "logger must not be empty")
+		return nil, microerror.Maskf(invalidConfigError, "logger must not be empty")
 	}
 
 	newCommand := &Command{
@@ -97,13 +97,13 @@ func (c *Command) Execute(cmd *cobra.Command, args []string) {
 
 	err := f.Validate()
 	if err != nil {
-		c.logger.Log("error", fmt.Sprintf("%#v", microerror.MaskAny(err)))
+		c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
 		os.Exit(1)
 	}
 
 	err = c.execute()
 	if err != nil {
-		c.logger.Log("error", fmt.Sprintf("%#v", microerror.MaskAny(err)))
+		c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
 		os.Exit(1)
 	}
 
@@ -126,7 +126,7 @@ func (c *Command) execute() error {
 
 		k8sClient, err = k8s.NewClient(k8sConfig)
 		if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 	}
 
@@ -140,7 +140,7 @@ func (c *Command) execute() error {
 
 		newProvider, err = bridge.New(bridgeConfig)
 		if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 	}
 
@@ -154,7 +154,7 @@ func (c *Command) execute() error {
 
 		newUpdater, err = updater.New(updaterConfig)
 		if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 	}
 
@@ -164,7 +164,7 @@ func (c *Command) execute() error {
 		action := func() error {
 			podInfos, err = newProvider.Lookup()
 			if err != nil {
-				return microerror.MaskAny(err)
+				return microerror.Mask(err)
 			}
 
 			return nil
@@ -172,7 +172,7 @@ func (c *Command) execute() error {
 
 		err := backoff.Retry(action, backoff.NewExponentialBackOff())
 		if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 
 		for _, pi := range podInfos {
@@ -186,7 +186,7 @@ func (c *Command) execute() error {
 		action := func() error {
 			err := newUpdater.Create(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
 			if err != nil {
-				return microerror.MaskAny(err)
+				return microerror.Mask(err)
 			}
 
 			return nil
@@ -194,7 +194,7 @@ func (c *Command) execute() error {
 
 		err := backoff.Retry(action, backoff.NewExponentialBackOff())
 		if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 
 		c.logger.Log("debug", fmt.Sprintf("added IP to endpoint of service '%s'", f.Kubernetes.Cluster.Service))
@@ -216,7 +216,7 @@ func (c *Command) execute() error {
 		action := func() error {
 			err := newUpdater.Delete(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
 			if err != nil {
-				return microerror.MaskAny(err)
+				return microerror.Mask(err)
 			}
 
 			return nil
@@ -224,7 +224,7 @@ func (c *Command) execute() error {
 
 		err := backoff.Retry(action, backoff.NewExponentialBackOff())
 		if err != nil {
-			c.logger.Log("error", fmt.Sprintf("%#v", microerror.MaskAny(err)))
+			c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
 			os.Exit(1)
 		}
 

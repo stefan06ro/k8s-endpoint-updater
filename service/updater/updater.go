@@ -3,8 +3,8 @@ package updater
 import (
 	"net"
 
-	microerror "github.com/giantswarm/microkit/error"
-	micrologger "github.com/giantswarm/microkit/logger"
+	"github.com/giantswarm/microerror"
+	"github.com/giantswarm/micrologger"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -34,10 +34,10 @@ func DefaultConfig() Config {
 func New(config Config) (*Updater, error) {
 	// Dependencies.
 	if config.K8sClient == nil {
-		return nil, microerror.MaskAnyf(invalidConfigError, "config.K8sClient must not be empty")
+		return nil, microerror.Maskf(invalidConfigError, "config.K8sClient must not be empty")
 	}
 	if config.Logger == nil {
-		return nil, microerror.MaskAnyf(invalidConfigError, "config.Logger must not be empty")
+		return nil, microerror.Maskf(invalidConfigError, "config.Logger must not be empty")
 	}
 
 	newUpdater := &Updater{
@@ -59,7 +59,7 @@ func (p *Updater) Create(namespace, service string, podInfos []provider.PodInfo)
 	for _, pi := range podInfos {
 		s, err := p.k8sClient.Core().Services(namespace).Get(service, metav1.GetOptions{})
 		if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 
 		endpoint := &apiv1.Endpoints{
@@ -87,10 +87,10 @@ func (p *Updater) Create(namespace, service string, podInfos []provider.PodInfo)
 			// need to append the IPs we got in podInfos.
 			err := p.appendIPs(namespace, service, podInfos)
 			if err != nil {
-				return microerror.MaskAny(err)
+				return microerror.Mask(err)
 			}
 		} else if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 	}
 
@@ -100,7 +100,7 @@ func (p *Updater) Create(namespace, service string, podInfos []provider.PodInfo)
 func (p *Updater) Delete(namespace, service string, podInfos []provider.PodInfo) error {
 	endpoints, err := p.k8sClient.Core().Endpoints(namespace).List(metav1.ListOptions{})
 	if err != nil {
-		return microerror.MaskAny(err)
+		return microerror.Mask(err)
 	}
 
 	for i, e := range endpoints.Items {
@@ -120,7 +120,7 @@ func (p *Updater) Delete(namespace, service string, podInfos []provider.PodInfo)
 
 		_, err = p.k8sClient.Core().Endpoints(namespace).Update(&endpoints.Items[i])
 		if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 	}
 
@@ -130,7 +130,7 @@ func (p *Updater) Delete(namespace, service string, podInfos []provider.PodInfo)
 func (p *Updater) appendIPs(namespace, service string, podInfos []provider.PodInfo) error {
 	endpoints, err := p.k8sClient.Core().Endpoints(namespace).List(metav1.ListOptions{})
 	if err != nil {
-		return microerror.MaskAny(err)
+		return microerror.Mask(err)
 	}
 
 	for i, e := range endpoints.Items {
@@ -158,7 +158,7 @@ func (p *Updater) appendIPs(namespace, service string, podInfos []provider.PodIn
 
 		_, err = p.k8sClient.Core().Endpoints(namespace).Update(&endpoints.Items[i])
 		if err != nil {
-			return microerror.MaskAny(err)
+			return microerror.Mask(err)
 		}
 	}
 
