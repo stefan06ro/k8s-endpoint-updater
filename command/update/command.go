@@ -201,44 +201,52 @@ func (c *Command) execute() error {
 	}
 
 	// Listen to OS signals issued by the Kubernetes scheduler.
-	listener := make(chan os.Signal, 2)
-	signal.Notify(listener, syscall.SIGTERM, syscall.SIGKILL)
+	signalCh := make(chan os.Signal, 2)
+	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGKILL)
 
 	c.logger.Log("debug", "waiting for termination signal")
 
-	s := <-listener
+	s := <-signalCh
 
-	c.logger.Log("debug", fmt.Sprintf("received termination signal: %#v (%s)\n", s, s))
+	c.logger.Log("debug", fmt.Sprintf("received termination signal: %#v (%s)", s, s))
+
+	errCh := make(chan error)
 
 	// Use the updater to actually delete the endpoints identified by the provided
 	// flags.
 	go func() {
+		defer close(errCh)
+
 		action := func() error {
 			err := newUpdater.Delete(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
 			if err != nil {
 				return microerror.Mask(err)
 			}
-
 			return nil
 		}
 
 		err := backoff.Retry(action, backoff.NewExponentialBackOff())
 		if err != nil {
-			c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
-			os.Exit(1)
+			errCh <- microerror.Mask(err)
+			return
 		}
 
-		c.logger.Log("debug", fmt.Sprintf("removed IP from endpoint of service '%s'", f.Kubernetes.Cluster.Service))
-		c.logger.Log("debug", "shutting down with exit code 0")
-
-		os.Exit(0)
 	}()
 
-	<-listener
+	exitCode := 0
 
-	c.logger.Log("debug", "shutting down with exit code 0")
+	select {
+	case s := <-signalCh:
+		c.logger.Log("debug", fmt.Sprintf("received termination signal: %#v (%s) again, exiting immediately", s, s))
+	case err := <-errCh:
+		if err != nil {
+			c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
+			exitCode = 1
+		}
+	}
 
-	os.Exit(0)
+	c.logger.Log("debug", fmt.Sprintf("shutting down with exit code %d", exitCode))
+	os.Exit(exitCode)
 
 	return nil
 }
