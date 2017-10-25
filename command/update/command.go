@@ -200,6 +200,4 @@ func (c *Command) execute() error {
 
 	// wait forever
 	select {}
-
-	return nil
 }
