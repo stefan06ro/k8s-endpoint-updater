@@ -110,23 +110,13 @@ func (c *Command) Execute(cmd *cobra.Command, args []string) {
 
 func (c *Command) execute() error {
 	var err error
-	// Create a new logger which is used by all packages.
-	var newLogger micrologger.Logger
-	{
-		loggerConfig := micrologger.DefaultConfig()
-		loggerConfig.IOWriter = os.Stdout
-		newLogger, err = micrologger.New(loggerConfig)
-		if err != nil {
-			return err
-		}
-	}
 
 	var k8sClient kubernetes.Interface
 	{
 		k8sConfig := k8sclient.DefaultConfig()
 
 		k8sConfig.Address = f.Kubernetes.Address
-		k8sConfig.Logger = newLogger
+		k8sConfig.Logger = c.logger
 		k8sConfig.InCluster = f.Kubernetes.InCluster
 		k8sConfig.TLS.CAFile = f.Kubernetes.TLS.CaFile
 		k8sConfig.TLS.CrtFile = f.Kubernetes.TLS.CrtFile
