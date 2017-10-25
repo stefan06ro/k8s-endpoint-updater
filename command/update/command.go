@@ -16,6 +16,7 @@ import (
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider/bridge"
 	"github.com/giantswarm/k8s-endpoint-updater/service/updater"
+	"net"
 )
 
 var (
@@ -54,8 +55,8 @@ func New(config Config) (*Command, error) {
 
 	newCommand.cobraCommand = &cobra.Command{
 		Use:   "update",
-		Short: "Update annotation on KVM pod based on given configuration.",
-		Long:  "Update annotation on KVM pod based on given configuration.",
+		Short: "Update annotations on KVM pod based on given configuration.",
+		Long:  "Update annotations on KVM pod based on given configuration.",
 		Run:   newCommand.Execute,
 	}
 
@@ -91,7 +92,7 @@ func (c *Command) CobraCommand() *cobra.Command {
 }
 
 func (c *Command) Execute(cmd *cobra.Command, args []string) {
-	c.logger.Log("info", "start adding annotation to KVM pod")
+	c.logger.Log("info", "start adding annotations to KVM pod")
 
 	err := f.Validate()
 	if err != nil {
@@ -157,11 +158,10 @@ func (c *Command) execute() error {
 	}
 
 	// Here we lookup the VM IP we are interested in.
-	var podInfo provider.PodInfo
+	var podIP net.IP
 	{
 		action := func() error {
-			podInfo, err = newProvider.Lookup()
-			podInfo.Name = f.Kubernetes.Pod.Name
+			podIP, err = newProvider.Lookup()
 
 			if err != nil {
 				return microerror.Mask(err)
@@ -175,14 +175,14 @@ func (c *Command) execute() error {
 			return microerror.Mask(err)
 		}
 
-		c.logger.Log("debug", fmt.Sprintf("found pod info of service '%s'", f.Kubernetes.Cluster.Service), "ip", podInfo.IP.String())
+		c.logger.Log("debug", fmt.Sprintf("found pod info of service '%s'", f.Kubernetes.Cluster.Service), "ip", podIP.String())
 
 	}
 
 	// Use the updater to actually add annotations to the kvm pod.
 	{
 		action := func() error {
-			err := newUpdater.AddAnnotations(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfo)
+			err := newUpdater.AddAnnotations(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, f.Kubernetes.Pod.Name, podIP)
 			if err != nil {
 				return microerror.Mask(err)
 			}
@@ -198,7 +198,8 @@ func (c *Command) execute() error {
 		c.logger.Log("debug", fmt.Sprintf("added annotations to the KVM pod '%s'", f.Kubernetes.Pod.Name))
 	}
 
-	c.logger.Log("debug", fmt.Sprint("shutting down "))
+	// wait forever
+	select {}
 
 	return nil
 }

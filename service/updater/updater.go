@@ -6,7 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
+	"net"
 )
 
 const (
@@ -56,14 +56,14 @@ type Updater struct {
 	logger    micrologger.Logger
 }
 
-func (p *Updater) AddAnnotations(namespace, service string, podInfo provider.PodInfo) error {
-	kvmPod, err := p.k8sClient.CoreV1().Pods(namespace).Get(podInfo.Name, metav1.GetOptions{})
+func (p *Updater) AddAnnotations(namespace, service string, podName string, podIP net.IP) error {
+	kvmPod, err := p.k8sClient.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	kvmPod.Annotations[annotationIp] = podInfo.IP.String()
+	kvmPod.Annotations[annotationIp] = podIP.String()
 	kvmPod.Annotations[annotationService] = service
 
 	_, err = p.k8sClient.CoreV1().Pods(namespace).Update(kvmPod)
