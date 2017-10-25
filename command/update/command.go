@@ -10,8 +10,7 @@ import (
 	"github.com/cenk/backoff"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
-	"github.com/giantswarm/micrologger/microloggertest"
-	"github.com/giantswarm/operatorkit/client/k8s"
+	"github.com/giantswarm/operatorkit/client/k8sclient"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 
@@ -115,16 +114,16 @@ func (c *Command) execute() error {
 
 	var k8sClient kubernetes.Interface
 	{
-		k8sConfig := k8s.DefaultConfig()
+		k8sConfig := k8sclient.DefaultConfig()
 
 		k8sConfig.Address = f.Kubernetes.Address
-		k8sConfig.Logger = microloggertest.New()
+		k8sConfig.Logger = c.logger
 		k8sConfig.InCluster = f.Kubernetes.InCluster
 		k8sConfig.TLS.CAFile = f.Kubernetes.TLS.CaFile
 		k8sConfig.TLS.CrtFile = f.Kubernetes.TLS.CrtFile
 		k8sConfig.TLS.KeyFile = f.Kubernetes.TLS.KeyFile
 
-		k8sClient, err = k8s.NewClient(k8sConfig)
+		k8sClient, err = k8sclient.New(k8sConfig)
 		if err != nil {
 			return microerror.Mask(err)
 		}
