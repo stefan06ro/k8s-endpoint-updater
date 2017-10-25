@@ -4,14 +4,11 @@ package update
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/cenk/backoff"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
-	"github.com/giantswarm/micrologger/microloggertest"
-	"github.com/giantswarm/operatorkit/client/k8s"
+	"github.com/giantswarm/operatorkit/client/k8sclient"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 
@@ -57,8 +54,8 @@ func New(config Config) (*Command, error) {
 
 	newCommand.cobraCommand = &cobra.Command{
 		Use:   "update",
-		Short: "Update Kubernetes endpoints based on given configuration.",
-		Long:  "Update Kubernetes endpoints based on given configuration.",
+		Short: "Update annotation on KVM pod based on given configuration.",
+		Long:  "Update annotation on KVM pod based on given configuration.",
 		Run:   newCommand.Execute,
 	}
 
@@ -69,6 +66,7 @@ func New(config Config) (*Command, error) {
 	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.TLS.CaFile, "service.kubernetes.tls.caFile", "", "Certificate authority file path to use to authenticate with Kubernetes.")
 	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.TLS.CrtFile, "service.kubernetes.tls.crtFile", "", "Certificate file path to use to authenticate with Kubernetes.")
 	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.TLS.KeyFile, "service.kubernetes.tls.keyFile", "", "Key file path to use to authenticate with Kubernetes.")
+	newCommand.CobraCommand().PersistentFlags().StringVar(&f.Kubernetes.Pod.Name, "service.kubernetes.pod.name", "", "Name of the guest cluster kvm Kubernetes pod.")
 
 	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Bridge.Name, "provider.bridge.name", "", "Bridge name of the guest cluster VM on the host network.")
 	newCommand.cobraCommand.PersistentFlags().StringVar(&f.Provider.Env.Prefix, "provider.env.prefix", "K8S_ENDPOINT_UPDATER_POD_", "Prefix of environment variables providing pod names.")
@@ -93,7 +91,7 @@ func (c *Command) CobraCommand() *cobra.Command {
 }
 
 func (c *Command) Execute(cmd *cobra.Command, args []string) {
-	c.logger.Log("info", "start updating Kubernetes endpoint")
+	c.logger.Log("info", "start adding annotation to KVM pod")
 
 	err := f.Validate()
 	if err != nil {
@@ -107,24 +105,34 @@ func (c *Command) Execute(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	c.logger.Log("info", "finished updating Kubernetes endpoint")
+	c.logger.Log("info", "finished adding annotations to KVM pod")
 }
 
 func (c *Command) execute() error {
 	var err error
+	// Create a new logger which is used by all packages.
+	var newLogger micrologger.Logger
+	{
+		loggerConfig := micrologger.DefaultConfig()
+		loggerConfig.IOWriter = os.Stdout
+		newLogger, err = micrologger.New(loggerConfig)
+		if err != nil {
+			return err
+		}
+	}
 
 	var k8sClient kubernetes.Interface
 	{
-		k8sConfig := k8s.DefaultConfig()
+		k8sConfig := k8sclient.DefaultConfig()
 
 		k8sConfig.Address = f.Kubernetes.Address
-		k8sConfig.Logger = microloggertest.New()
+		k8sConfig.Logger = newLogger
 		k8sConfig.InCluster = f.Kubernetes.InCluster
 		k8sConfig.TLS.CAFile = f.Kubernetes.TLS.CaFile
 		k8sConfig.TLS.CrtFile = f.Kubernetes.TLS.CrtFile
 		k8sConfig.TLS.KeyFile = f.Kubernetes.TLS.KeyFile
 
-		k8sClient, err = k8s.NewClient(k8sConfig)
+		k8sClient, err = k8sclient.New(k8sConfig)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -159,10 +167,12 @@ func (c *Command) execute() error {
 	}
 
 	// Here we lookup the VM IP we are interested in.
-	var podInfos []provider.PodInfo
+	var podInfo provider.PodInfo
 	{
 		action := func() error {
-			podInfos, err = newProvider.Lookup()
+			podInfo, err = newProvider.Lookup()
+			podInfo.Name = f.Kubernetes.Pod.Name
+
 			if err != nil {
 				return microerror.Mask(err)
 			}
@@ -175,16 +185,14 @@ func (c *Command) execute() error {
 			return microerror.Mask(err)
 		}
 
-		for _, pi := range podInfos {
-			c.logger.Log("debug", fmt.Sprintf("found pod info of service '%s'", f.Kubernetes.Cluster.Service), "ip", pi.IP.String())
-		}
+		c.logger.Log("debug", fmt.Sprintf("found pod info of service '%s'", f.Kubernetes.Cluster.Service), "ip", podInfo.IP.String())
+
 	}
 
-	// Use the updater to actually add the endpoints identified by the provided
-	// flags.
+	// Use the updater to actually add annotations to the kvm pod.
 	{
 		action := func() error {
-			err := newUpdater.Create(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
+			err := newUpdater.AddAnnotations(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfo)
 			if err != nil {
 				return microerror.Mask(err)
 			}
@@ -197,56 +205,10 @@ func (c *Command) execute() error {
 			return microerror.Mask(err)
 		}
 
-		c.logger.Log("debug", fmt.Sprintf("added IP to endpoint of service '%s'", f.Kubernetes.Cluster.Service))
+		c.logger.Log("debug", fmt.Sprintf("added annotations to the KVM pod '%s'", f.Kubernetes.Pod.Name))
 	}
 
-	// Listen to OS signals issued by the Kubernetes scheduler.
-	signalCh := make(chan os.Signal, 2)
-	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGKILL)
-
-	c.logger.Log("debug", "waiting for termination signal")
-
-	s := <-signalCh
-
-	c.logger.Log("debug", fmt.Sprintf("received termination signal: %#v (%s)", s, s))
-
-	errCh := make(chan error)
-
-	// Use the updater to actually delete the endpoints identified by the provided
-	// flags.
-	go func() {
-		defer close(errCh)
-
-		action := func() error {
-			err := newUpdater.Delete(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, podInfos)
-			if err != nil {
-				return microerror.Mask(err)
-			}
-			return nil
-		}
-
-		err := backoff.Retry(action, backoff.NewExponentialBackOff())
-		if err != nil {
-			errCh <- microerror.Mask(err)
-			return
-		}
-
-	}()
-
-	exitCode := 0
-
-	select {
-	case s := <-signalCh:
-		c.logger.Log("debug", fmt.Sprintf("received termination signal: %#v (%s) again, exiting immediately", s, s))
-	case err := <-errCh:
-		if err != nil {
-			c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
-			exitCode = 1
-		}
-	}
-
-	c.logger.Log("debug", fmt.Sprintf("shutting down with exit code %d", exitCode))
-	os.Exit(exitCode)
+	c.logger.Log("debug", fmt.Sprint("shutting down "))
 
 	return nil
 }

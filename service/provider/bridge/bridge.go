@@ -69,19 +69,20 @@ type Provider struct {
 	bridgeName string
 }
 
-func (p *Provider) Lookup() ([]provider.PodInfo, error) {
+func (p *Provider) Lookup() (provider.PodInfo, error) {
+	podInfo := provider.PodInfo{}
 	// We fetch the interface first because it holds all IP addresses associated
 	// with it.
 	netInterface, err := net.InterfaceByName(p.bridgeName)
 	if err != nil {
-		return nil, microerror.Mask(err)
+		return podInfo, microerror.Mask(err)
 	}
 
 	// The interface addresses have to be parsed to find the actual IPV4 we are
 	// interested in.
 	ip, err := ipv4FromInterface(netInterface)
 	if err != nil {
-		return nil, microerror.Mask(err)
+		return podInfo, microerror.Mask(err)
 	}
 
 	// The bridge provider lookup assumes some aspects of our setup. The following
@@ -97,13 +98,9 @@ func (p *Provider) Lookup() ([]provider.PodInfo, error) {
 	// The bridge provider can only lookup one IP for one pod at a time, because
 	// it is running inside a pod and inspects the host network the container is
 	// running on.
-	podInfos := []provider.PodInfo{
-		{
-			IP: next,
-		},
-	}
+	podInfo.IP = next
 
-	return podInfos, nil
+	return podInfo, nil
 }
 
 func incrIPV4(ip net.IP) net.IP {

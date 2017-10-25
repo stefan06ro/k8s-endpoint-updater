@@ -18,7 +18,7 @@ var (
 func main() {
 	var err error
 
-	// Create a new logger which is used by all packages.
+	// AddAnnotations a new logger which is used by all packages.
 	var newLogger micrologger.Logger
 	{
 		loggerConfig := micrologger.DefaultConfig()
