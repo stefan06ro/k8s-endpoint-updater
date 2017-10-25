@@ -1,5 +1,5 @@
 hash: c3c348cc4f420c53054cdabf99568f2edb98b3a6c365a23fcacb9880f85d0003
-updated: 2017-10-25T15:47:38.380687385+02:00
+updated: 2017-10-25T16:00:09.205531499+02:00
 imports:
 - name: github.com/cenk/backoff
   version: 309aa717adbf351e92864cbedf9cca0b769a4b5a
@@ -78,9 +78,9 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/spf13/cobra
-  version: 7b2c5ac9fc04fc5efafb60700713d4fa609b777b
+  version: b78744579491c1ceeaaa3b40205e56b0591b93a3
 - name: github.com/spf13/pflag
-  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+  version: 7aff26db30c1be810f9de5038ec5ef96ac41fd7c
 - name: github.com/ugorji/go
   version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
   subpackages:
