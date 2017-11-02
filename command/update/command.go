@@ -175,13 +175,14 @@ func (c *Command) execute() error {
 			return microerror.Mask(err)
 		}
 
-		c.logger.Log("debug", fmt.Sprintf("found pod info of service '%s'", f.Kubernetes.Cluster.Service), "ip", podIP.String())
+		c.logger.Log("debug", fmt.Sprintf("found pod info for service '%s'", f.Kubernetes.Cluster.Service), "ip", podIP.String())
 
 	}
 
 	// Use the updater to actually add annotations to the kvm pod.
 	{
 		action := func() error {
+			c.logger.Log("debug","adding anotations")
 			err := newUpdater.AddAnnotations(f.Kubernetes.Cluster.Namespace, f.Kubernetes.Cluster.Service, f.Kubernetes.Pod.Name, podIP)
 			if err != nil {
 				return microerror.Mask(err)

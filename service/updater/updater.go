@@ -59,6 +59,7 @@ type Updater struct {
 func (p *Updater) AddAnnotations(namespace, service string, podName string, podIP net.IP) error {
 	kvmPod, err := p.k8sClient.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 
+	p.logger.Log("debug","fetched pod")
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -67,7 +68,7 @@ func (p *Updater) AddAnnotations(namespace, service string, podName string, podI
 	kvmPod.Annotations[annotationService] = service
 
 	_, err = p.k8sClient.CoreV1().Pods(namespace).Update(kvmPod)
-
+	p.logger.Log("debug","addedd anotation to pod")
 	if err != nil {
 		return microerror.Mask(err)
 	}
