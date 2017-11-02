@@ -6,8 +6,6 @@ import (
 
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
-
-	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
 )
 
 const (
@@ -69,7 +67,7 @@ type Provider struct {
 	bridgeName string
 }
 
-func (p *Provider) Lookup() ([]provider.PodInfo, error) {
+func (p *Provider) Lookup() (net.IP, error) {
 	// We fetch the interface first because it holds all IP addresses associated
 	// with it.
 	netInterface, err := net.InterfaceByName(p.bridgeName)
@@ -94,16 +92,7 @@ func (p *Provider) Lookup() ([]provider.PodInfo, error) {
 	//
 	next := incrIPV4(ip)
 
-	// The bridge provider can only lookup one IP for one pod at a time, because
-	// it is running inside a pod and inspects the host network the container is
-	// running on.
-	podInfos := []provider.PodInfo{
-		{
-			IP: next,
-		},
-	}
-
-	return podInfos, nil
+	return next, nil
 }
 
 func incrIPV4(ip net.IP) net.IP {
