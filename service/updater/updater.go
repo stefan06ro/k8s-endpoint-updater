@@ -6,6 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"fmt"
 	"net"
 )
 
@@ -60,6 +61,7 @@ func (p *Updater) AddAnnotations(namespace, service string, podName string, podI
 	kvmPod, err := p.k8sClient.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 
 	if err != nil {
+		p.logger.Log("error", fmt.Sprintf("Fetching kvm pod failed: %#v.", err))
 		return microerror.Mask(err)
 	}
 
@@ -69,6 +71,7 @@ func (p *Updater) AddAnnotations(namespace, service string, podName string, podI
 	_, err = p.k8sClient.CoreV1().Pods(namespace).Update(kvmPod)
 
 	if err != nil {
+		p.logger.Log("error", fmt.Sprintf("Updating pod annotation failed: %#v.", err))
 		return microerror.Mask(err)
 	}
 
