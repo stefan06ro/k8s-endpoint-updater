@@ -198,7 +198,7 @@ func (c *Command) execute() error {
 
 		c.logger.Log("debug", fmt.Sprintf("added annotations to the KVM pod '%s'", f.Kubernetes.Pod.Name))
 	}
-
+	c.logger.Log("debug","waiting forever")
 	// wait forever
 	select {}
 }
