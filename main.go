@@ -21,8 +21,9 @@ func main() {
 	// Create a new logger which is used by all packages.
 	var newLogger micrologger.Logger
 	{
-		loggerConfig := micrologger.DefaultConfig()
-		loggerConfig.IOWriter = os.Stdout
+		loggerConfig := micrologger.Config{
+			IOWriter: os.Stdout,
+		}
 		newLogger, err = micrologger.New(loggerConfig)
 		if err != nil {
 			panic(err)

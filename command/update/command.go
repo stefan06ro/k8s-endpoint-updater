@@ -3,20 +3,21 @@ package update
 
 import (
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/cenk/backoff"
+	"github.com/giantswarm/k8sclient"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
-	"github.com/giantswarm/operatorkit/client/k8sclient"
+	"github.com/giantswarm/operatorkit/client/k8srestconfig"
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/giantswarm/k8s-endpoint-updater/command/update/flag"
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider"
 	"github.com/giantswarm/k8s-endpoint-updater/service/provider/bridge"
 	"github.com/giantswarm/k8s-endpoint-updater/service/updater"
-	"net"
 )
 
 const (
@@ -116,18 +117,33 @@ func (c *Command) Execute(cmd *cobra.Command, args []string) {
 func (c *Command) execute() error {
 	var err error
 
-	var k8sClient kubernetes.Interface
+	var k8sClients *k8sclient.Clients
 	{
-		k8sConfig := k8sclient.DefaultConfig()
+		var restConfig *rest.Config
+		{
+			c := k8srestconfig.Config{
+				Logger: c.logger,
 
-		k8sConfig.Address = f.Kubernetes.Address
-		k8sConfig.Logger = c.logger
-		k8sConfig.InCluster = f.Kubernetes.InCluster
-		k8sConfig.TLS.CAFile = f.Kubernetes.TLS.CaFile
-		k8sConfig.TLS.CrtFile = f.Kubernetes.TLS.CrtFile
-		k8sConfig.TLS.KeyFile = f.Kubernetes.TLS.KeyFile
+				Address:   f.Kubernetes.Address,
+				InCluster: f.Kubernetes.InCluster,
+				TLS: k8srestconfig.ConfigTLS{
+					CAFile:  f.Kubernetes.TLS.CaFile,
+					CrtFile: f.Kubernetes.TLS.CrtFile,
+					KeyFile: f.Kubernetes.TLS.KeyFile,
+				},
+			}
 
-		k8sClient, err = k8sclient.New(k8sConfig)
+			restConfig, err = k8srestconfig.New(c)
+			if err != nil {
+				return microerror.Mask(err)
+			}
+		}
+
+		k8sConfig := k8sclient.ClientsConfig{
+			RestConfig: restConfig,
+		}
+
+		k8sClients, err = k8sclient.NewClients(k8sConfig)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -152,7 +168,7 @@ func (c *Command) execute() error {
 	{
 		updaterConfig := updater.DefaultConfig()
 
-		updaterConfig.K8sClient = k8sClient
+		updaterConfig.K8sClient = k8sClients.K8sClient()
 		updaterConfig.Logger = c.logger
 
 		newUpdater, err = updater.New(updaterConfig)

@@ -27,7 +27,7 @@ import (
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/collate/build"
-	"golang.org/x/text/collate/colltab"
+	"golang.org/x/text/internal/colltab"
 	"golang.org/x/text/internal/gen"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/cldr"
@@ -195,7 +195,7 @@ func openArchive() *zip.Reader {
 }
 
 // parseUCA parses a Default Unicode Collation Element Table of the format
-// specified in http://www.unicode.org/reports/tr10/#File_Format.
+// specified in https://www.unicode.org/reports/tr10/#File_Format.
 // It returns the variable top.
 func parseUCA(builder *build.Builder) {
 	var r io.ReadCloser
