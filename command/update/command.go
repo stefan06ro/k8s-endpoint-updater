@@ -140,6 +140,8 @@ func (c *Command) execute() error {
 		}
 
 		k8sConfig := k8sclient.ClientsConfig{
+			Logger: c.logger,
+
 			RestConfig: restConfig,
 		}
 
