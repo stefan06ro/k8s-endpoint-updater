@@ -26,8 +26,8 @@
 
 
 [[constraint]]
-  name = "github.com/cenk/backoff"
-  version = "3.0.0"
+  name = "github.com/giantswarm/backoff"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/giantswarm/k8sclient"
@@ -42,20 +42,16 @@
   branch = "master"
 
 [[constraint]]
-  name = "github.com/giantswarm/operatorkit"
-  branch = "master"
-
-[[constraint]]
   name = "github.com/spf13/cobra"
   branch = "master"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.15.4"
+  version = "kubernetes-1.16.3"
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "kubernetes-1.15.4"
+  version = "kubernetes-1.16.3"
 
 [prune]
   go-tests = true

@@ -6,11 +6,11 @@ import (
 	"net"
 	"os"
 
-	"github.com/cenk/backoff"
+	"github.com/giantswarm/backoff"
 	"github.com/giantswarm/k8sclient"
+	"github.com/giantswarm/k8sclient/k8srestconfig"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
-	"github.com/giantswarm/operatorkit/client/k8srestconfig"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/rest"
 
@@ -192,7 +192,7 @@ func (c *Command) execute() error {
 			return nil
 		}
 
-		err := backoff.Retry(action, backoff.NewExponentialBackOff())
+		err := backoff.Retry(action, backoff.NewExponential(backoff.MediumMaxWait, backoff.LongMaxInterval))
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -212,7 +212,7 @@ func (c *Command) execute() error {
 			return nil
 		}
 
-		err := backoff.Retry(action, backoff.NewExponentialBackOff())
+		err := backoff.Retry(action, backoff.NewExponential(backoff.MediumMaxWait, backoff.LongMaxInterval))
 		if err != nil {
 			return microerror.Mask(err)
 		}
