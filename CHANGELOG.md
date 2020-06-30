@@ -7,6 +7,8 @@ and this project's packages adheres to [Semantic Versioning](http://semver.org/s
 
 ## [Unreleased]
 
+## [0.1.0] - 2020-06-30
+
 ### Added
 
 - Add github workflows.
@@ -16,4 +18,5 @@ and this project's packages adheres to [Semantic Versioning](http://semver.org/s
 - Use latest `architect-orb`
 - Switch from `dep` to go modules.
 
-[Unreleased]: https://github.com/giantswarm/k8s-endpoint-updater/tree/master
+[Unreleased]: https://github.com/giantswarm/k8s-endpoint-updater/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/giantswarm/k8s-endpoint-updater/releases/tag/v0.1.0
