@@ -47,5 +47,8 @@ func main() {
 		}
 	}
 
-	newCommand.CobraCommand().Execute()
+	err = newCommand.CobraCommand().Execute()
+	if err != nil {
+		panic(err)
+	}
 }

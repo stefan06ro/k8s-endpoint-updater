@@ -9,6 +9,7 @@ and this project's packages adheres to [Semantic Versioning](http://semver.org/s
 
 ### Changed
 
+- Use latest `architect-orb`
 - Switch from `dep` to go modules.
 
 [Unreleased]: https://github.com/giantswarm/k8s-endpoint-updater/tree/master

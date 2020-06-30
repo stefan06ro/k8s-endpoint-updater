@@ -97,21 +97,21 @@ func (c *Command) CobraCommand() *cobra.Command {
 }
 
 func (c *Command) Execute(cmd *cobra.Command, args []string) {
-	c.logger.Log("info", "start adding annotations to KVM pod")
+	_ = c.logger.Log("info", "start adding annotations to KVM pod")
 
 	err := f.Validate()
 	if err != nil {
-		c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
+		_ = c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
 		os.Exit(1)
 	}
 
 	err = c.execute()
 	if err != nil {
-		c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
+		_ = c.logger.Log("error", fmt.Sprintf("%#v", microerror.Mask(err)))
 		os.Exit(1)
 	}
 
-	c.logger.Log("info", "finished adding annotations to KVM pod")
+	_ = c.logger.Log("info", "finished adding annotations to KVM pod")
 }
 
 func (c *Command) execute() error {
@@ -197,7 +197,7 @@ func (c *Command) execute() error {
 			return microerror.Mask(err)
 		}
 
-		c.logger.Log("debug", fmt.Sprintf("found pod info for service '%s'", f.Kubernetes.Cluster.Service), "ip", podIP.String())
+		_ = c.logger.Log("debug", fmt.Sprintf("found pod info for service '%s'", f.Kubernetes.Cluster.Service), "ip", podIP.String())
 
 	}
 
@@ -217,9 +217,9 @@ func (c *Command) execute() error {
 			return microerror.Mask(err)
 		}
 
-		c.logger.Log("debug", fmt.Sprintf("added annotations to the KVM pod '%s'", f.Kubernetes.Pod.Name))
+		_ = c.logger.Log("debug", fmt.Sprintf("added annotations to the KVM pod '%s'", f.Kubernetes.Pod.Name))
 	}
-	c.logger.Log("debug", "waiting forever")
+	_ = c.logger.Log("debug", "waiting forever")
 	// wait forever
 	select {}
 }

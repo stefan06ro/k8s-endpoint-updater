@@ -7,8 +7,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"fmt"
-	"k8s.io/apimachinery/pkg/types"
 	"net"
+
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -61,14 +62,14 @@ func (p *Updater) AddAnnotations(namespace, service string, podName string, podI
 	kvmPod, err := p.k8sClient.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 
 	if err != nil {
-		p.logger.Log("error", fmt.Sprintf("Fetching kvm pod failed: %#v.", err))
+		_ = p.logger.Log("error", fmt.Sprintf("Fetching kvm pod failed: %#v.", err))
 		return microerror.Mask(err)
 	}
 	patch := fmt.Sprintf("{\"metadata\":{\"annotations\":{\"%s\":\"%s\"}}}\n", annotationIp, podIP.String())
 
 	_, err = p.k8sClient.CoreV1().Pods(namespace).Patch(kvmPod.Name, types.StrategicMergePatchType, []byte(patch))
 	if err != nil {
-		p.logger.Log("error", fmt.Sprintf("Updating pod annotation failed: %#v.", err))
+		_ = p.logger.Log("error", fmt.Sprintf("Updating pod annotation failed: %#v.", err))
 		return microerror.Mask(err)
 	}
 
